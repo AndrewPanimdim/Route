@@ -1,0 +1,203 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="description" content="RouteRider — Free multi-stop delivery route optimizer for Metro Manila riders. No login required." />
+  <title>RouteRider — Delivery Route Optimizer</title>
+
+  <!-- Leaflet CSS — MUST be in <head> or the map tiles won't position correctly -->
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+
+  <!-- App styles -->
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+
+<div id="app">
+
+  <!-- ── Sidebar ─────────────────────────────────────────────────────────── -->
+  <div id="sidebar">
+
+    <!-- Logo -->
+    <div id="sidebar-header">
+      <div class="logo">Route<span>Rider</span></div>
+      <div class="tagline">Multi-stop delivery optimizer · Metro Manila</div>
+    </div>
+
+    <!-- Scrollable body -->
+    <div id="sidebar-body">
+
+      <!-- Ground Zero Section -->
+      <div id="gz-section">
+        <div class="section-label gz-label">⊙ Ground Zero — Start Point</div>
+        <div class="search-wrapper">
+          <div class="search-row">
+            <input type="text" id="gz-input" class="search-input"
+                   placeholder="Where are you starting from?"
+                   autocomplete="off" aria-label="Ground zero search" />
+            <button class="search-btn" id="gz-search-btn" title="Set start point" aria-label="Search ground zero">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none"
+                   stroke="white" stroke-width="2.5" stroke-linecap="round">
+                <circle cx="11" cy="11" r="6"/><line x1="21" y1="21" x2="16.65" y2="16.65"/>
+              </svg>
+            </button>
+          </div>
+          <div class="dropdown" id="gz-dropdown" role="listbox"></div>
+        </div>
+
+        <!-- Ground zero set card (shown after GZ is selected) -->
+        <div id="gz-set-card" aria-live="polite">
+          <div class="gz-badge">⊙</div>
+          <div class="gz-info">
+            <div class="gz-name" id="gz-name-display"></div>
+            <div class="gz-coords" id="gz-coords-display"></div>
+          </div>
+          <button id="gz-clear-btn" title="Change start point" aria-label="Clear ground zero">✕</button>
+        </div>
+      </div>
+
+      <!-- Add Stops Section -->
+      <div id="search-section">
+        <div class="section-label">Add Delivery Stops</div>
+        <div class="search-wrapper">
+          <div class="search-row">
+            <input type="text" id="stop-input" class="search-input"
+                   placeholder="Search place or address…"
+                   autocomplete="off" aria-label="Delivery stop search" />
+            <button class="search-btn" id="stop-search-btn" title="Search stop" aria-label="Search stop">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none"
+                   stroke="white" stroke-width="2.5" stroke-linecap="round">
+                <circle cx="11" cy="11" r="6"/><line x1="21" y1="21" x2="16.65" y2="16.65"/>
+              </svg>
+            </button>
+          </div>
+          <div class="dropdown" id="stop-dropdown" role="listbox"></div>
+        </div>
+      </div>
+
+      <!-- Stops List Section -->
+      <div id="stops-section">
+        <div class="stops-header">
+          <div class="section-label" style="margin-bottom:0">Delivery Stops</div>
+          <button id="clear-all-btn" aria-label="Clear all stops">Clear All</button>
+        </div>
+        <div id="stops-list" aria-live="polite">
+          <div class="empty-state">
+            <div class="icon">📦</div>
+            <p>Set your ground zero first,<br/>then add delivery stops.</p>
+          </div>
+        </div>
+      </div>
+
+      <!-- Route Panel (Algorithm Comparison + Route Summary) shown after compute -->
+      <div id="route-panel" style="display:none">
+
+        <!-- Algorithm Comparison -->
+        <div id="comparison-section">
+          <div class="section-label comparison-label">⊞ Algorithm Comparison</div>
+          <div id="comparison-table-wrap"></div>
+        </div>
+
+        <!-- Route Summary -->
+        <div id="route-summary-section">
+          <div class="section-label">Route Summary</div>
+          <div id="route-summary-legs"></div>
+        </div>
+
+      </div>
+
+    </div><!-- /sidebar-body -->
+
+    <!-- Footer: Stats + Compute Button -->
+    <div id="sidebar-footer">
+      <div id="stats-bar">
+        <div class="stat">
+          <div class="stat-value" id="stat-stops">0</div>
+          <div class="stat-label">Stops</div>
+        </div>
+        <div class="stat">
+          <div class="stat-value" id="stat-dist">—</div>
+          <div class="stat-label">km</div>
+        </div>
+        <div class="stat">
+          <div class="stat-value" id="stat-time">—</div>
+          <div class="stat-label">min</div>
+        </div>
+      </div>
+      <!-- Return to Ground Zero Toggle -->
+      <label id="return-to-base-wrap" title="Add a final leg back to your start point">
+        <input type="checkbox" id="return-to-base-toggle" />
+        <span class="toggle-track"><span class="toggle-thumb"></span></span>
+        <span class="toggle-label">Return to Ground Zero</span>
+      </label>
+
+      <button id="compute-btn" disabled aria-label="Compute optimal route">
+        Compute Optimal Route →
+      </button>
+    </div>
+
+  </div><!-- /sidebar -->
+
+  <!-- ── Map ──────────────────────────────────────────────────────────────── -->
+  <div id="map" aria-label="Delivery route map"></div>
+
+  <!-- ── Navigation Panel (live GPS turn-by-turn) ────────────────────────── -->
+  <div id="nav-panel" role="region" aria-label="Navigation guidance">
+
+    <!-- Top row: live dot | stop counter | recenter -->
+    <div id="nav-top-row">
+      <div id="nav-live-dot" title="Live GPS tracking active">
+        <span class="live-dot-pulse"></span>
+        <span id="nav-live-label">LIVE</span>
+      </div>
+      <div id="nav-header">Stop 1 of 1</div>
+      <button id="nav-recenter-btn" title="Recenter map on my location" aria-label="Recenter on my location">⊙</button>
+    </div>
+
+    <!-- Destination name -->
+    <div id="nav-stop-label"></div>
+
+    <!-- Turn instruction -->
+    <div id="nav-turn-row">
+      <div id="nav-turn-icon">↑</div>
+      <div id="nav-instruction">Acquiring GPS…</div>
+    </div>
+
+    <!-- Distances -->
+    <div id="nav-distances">
+      <div class="nav-dist-item">
+        <span class="nav-dist-label">To turn</span>
+        <span class="nav-dist-value" id="nav-to-turn">—</span>
+      </div>
+      <div class="nav-dist-divider"></div>
+      <div class="nav-dist-item">
+        <span class="nav-dist-label">To stop</span>
+        <span class="nav-dist-value" id="nav-dist">—</span>
+      </div>
+    </div>
+
+    <!-- Prev / Next controls -->
+    <div id="nav-controls">
+      <button class="nav-btn" id="nav-prev" aria-label="Previous stop">← Prev</button>
+      <button class="nav-btn" id="nav-next" aria-label="Mark arrived">✓ Arrived →</button>
+    </div>
+
+  </div>
+
+  <!-- ── Toast container ──────────────────────────────────────────────────── -->
+  <div id="toast" role="alert" aria-live="assertive"></div>
+
+</div><!-- /app -->
+
+<!--
+  Leaflet JS — MUST load before javascript.js
+  (Leaflet defines the global L object that javascript.js uses)
+-->
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+
+<!-- App JS — thin display layer, loads last -->
+<script src="javascript.js"></script>
+
+</body>
+</html>
